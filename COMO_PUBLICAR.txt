@@ -1,0 +1,26 @@
+PÁGINA DO CELULAR (WEMOB Bancada) - como deixar no ar
+
+O Chrome só deixa uma página usar o Bluetooth se ela vier de um endereço https.
+O jeito mais simples e de graça é o GitHub Pages (é só uma vez):
+
+1. Crie uma conta em https://github.com (se ainda não tiver).
+2. Clique em "New repository", dê o nome "bancada", deixe "Public" e crie.
+3. Clique em "uploading an existing file" e arraste TODOS os arquivos desta pasta:
+   index.html, manifest.webmanifest, sw.js, icone-192.png, icone-512.png
+   Clique em "Commit changes".
+4. Vá em Settings > Pages > em "Branch" escolha "main" e "/ (root)" > Save.
+5. Em 1 ou 2 minutos o endereço aparece no topo dessa tela, algo como:
+   https://SEU-USUARIO.github.io/bancada/
+6. No HUB: clique em "celular: ..." (canto de baixo da lateral) > "Como conectar o celular..."
+   e cole esse endereço. O HUB mostra o QR para abrir no celular.
+
+No celular (Android, Chrome):
+- Abra o endereço (ou leia o QR do HUB).
+- Menu do Chrome (3 pontinhos) > "Adicionar à tela inicial": vira um app e abre sem internet.
+- Toque em "Conectar ao PC" e escolha o PC na lista.
+
+No PC (uma vez): instalar a biblioteca do Bluetooth
+- No Início do HUB, "Instalar o que falta"  (ou:  py -3.13 -m pip install bless)
+- O Bluetooth do Windows tem que estar ligado.
+
+Para atualizar a página depois: suba os arquivos novos no mesmo repositório.

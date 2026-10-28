@@ -109,6 +109,15 @@ input[type=file]{display:none}
  </section>
 
  <section class="cartao">
+  <h2>Foto da assinatura</h2>
+  <div class="sub">Para o Cadastro de assinaturas: caneta escura em folha branca, foto de perto, com boa luz e sem sombra. No PC ela abre sozinha para conferir.</div>
+  <label class="botao sec" id="btAss" for="arqAss" aria-disabled="true">Fotografar a assinatura e mandar</label>
+  <input id="arqAss" type="file" accept="image/*" capture="environment">
+  <div class="barra" id="barraAss"><i></i></div>
+  <div class="resultado" id="resAss"></div>
+ </section>
+
+ <section class="cartao">
   <h2>Avisos do PC</h2>
   <ul id="avisos"><li class="vazio" style="border:0;background:none;padding:0">nenhum aviso ainda</li></ul>
  </section>
@@ -264,7 +273,7 @@ async function abrir(){
  conectado = true;
  estado("conectado: " + (aparelho.name || "PC"), "ok");
  $("cartaoConectar").style.display = "none";
- $("btLer").disabled = false; $("btFoto").removeAttribute("aria-disabled");
+ $("btLer").disabled = false; $("btFoto").removeAttribute("aria-disabled"); $("btAss").removeAttribute("aria-disabled");
  manterTela();
  vibrar(60);
 }
@@ -284,7 +293,7 @@ async function calibrar(){
 }
 function caiu(){
  conectado = false; rx = null; tx = null; recebendo = null;
- $("btLer").disabled = true; $("btFoto").setAttribute("aria-disabled", "true");
+ $("btLer").disabled = true; $("btFoto").setAttribute("aria-disabled", "true"); $("btAss").setAttribute("aria-disabled", "true");
  estado("reconectando…", "busca");
  reconectar();
 }
@@ -411,6 +420,24 @@ $("arqFoto").addEventListener("change", async e => {
   barra.style.display = "block"; cheia.style.width = "0";
   const t0 = Date.now();
   const resp = await pedir({t: "foto", codigo: $("codigo").value.trim()}, jpg, f => { cheia.style.width = (f * 100).toFixed(0) + "%";
+   r.textContent = "mandando " + Math.round(jpg.length / 1024) + " KB… " + Math.round(f * 100) + "%" });
+  r.textContent = (resp.ok ? "✔ " : "✖ ") + (resp.msg || "") + (resp.ok ? "  (" + ((Date.now() - t0) / 1000).toFixed(1) + " s)" : "");
+  r.className = "resultado " + (resp.ok ? "ok" : "erro"); vibrar(resp.ok ? 80 : [200, 100, 200]);
+ }catch(err){ r.textContent = "✖ " + (err.message || err); r.className = "resultado erro" }
+ setTimeout(() => barra.style.display = "none", 800);
+});
+
+// --- foto da assinatura (mais resolução: o traço precisa de detalhe) ---
+$("btAss").addEventListener("click", e => { if($("btAss").getAttribute("aria-disabled") === "true"){ e.preventDefault(); toast("Conecte ao PC primeiro", "erro") } });
+$("arqAss").addEventListener("change", async e => {
+ const arq = e.target.files[0]; e.target.value = ""; if(!arq) return;
+ const r = $("resAss"), barra = $("barraAss"), cheia = barra.querySelector("i");
+ r.textContent = "preparando a foto…"; r.className = "resultado";
+ try{
+  const jpg = await reduzir(arq, 1600, 0.8);
+  barra.style.display = "block"; cheia.style.width = "0";
+  const t0 = Date.now();
+  const resp = await pedir({t: "foto", para: "assinatura"}, jpg, f => { cheia.style.width = (f * 100).toFixed(0) + "%";
    r.textContent = "mandando " + Math.round(jpg.length / 1024) + " KB… " + Math.round(f * 100) + "%" });
   r.textContent = (resp.ok ? "✔ " : "✖ ") + (resp.msg || "") + (resp.ok ? "  (" + ((Date.now() - t0) / 1000).toFixed(1) + " s)" : "");
   r.className = "resultado " + (resp.ok ? "ok" : "erro"); vibrar(resp.ok ? 80 : [200, 100, 200]);
