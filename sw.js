@@ -1,5 +1,5 @@
 // Guarda a página no celular: depois da 1a vez, abre mesmo sem internet.
-const VERSAO = "bancada-2026-10-28";
+const VERSAO = "bancada-2026-10-28b";
 const ARQUIVOS = ["./", "index.html", "manifest.webmanifest", "icone-192.png", "icone-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQUIVOS))); self.skipWaiting(); });
 self.addEventListener("activate", e => {

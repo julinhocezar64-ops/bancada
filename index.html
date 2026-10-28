@@ -155,7 +155,7 @@ const TABELA = (() => { const t = new Uint32Array(256); for(let n=0;n<256;n++){ 
 function crc32(b){ let c = 0xFFFFFFFF; for(let i=0;i<b.length;i++) c = TABELA[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0 }
 
 // --- estado ---
-let aparelho = null, rx = null, tx = null, conectado = false, pedaco = 18, idMsg = 0, semResposta = true;
+let aparelho = null, rx = null, tx = null, conectado = false, pedaco = 18, idMsg = 0, semResposta = true, comPosicao = false;
 let filaGatt = Promise.resolve(), esperando = {}, recebendo = null, seqEsperada = -1, tentandoReconectar = false;
 let destino = lerMem("destino", "auto");
 
@@ -186,18 +186,38 @@ async function enviarMsg(cab, conteudo, pedacoUsado, progresso){
  const id = idMsg = (idMsg % 255) + 1;
  const h = enc.encode(JSON.stringify(cab)), c = conteudo || new Uint8Array(0);
  const corpo = new Uint8Array(h.length + 1 + c.length); corpo.set(h, 0); corpo.set(c, h.length + 1);
- const p = pedacoUsado || pedaco;
+ // HUB novo: cada pedaço leva a posição (3 bytes), e o PC monta na ordem certa
+ const pos = comPosicao, p = Math.max(15, (pedacoUsado || pedaco) - (pos ? 3 : 0));
  await escrever(new Uint8Array([1, id]));
  for(let i = 0; i < corpo.length; i += p){
-  const parte = corpo.subarray(i, i + p), q = new Uint8Array(2 + parte.length);
-  q[0] = 2; q[1] = id; q.set(parte, 2);
+  const parte = corpo.subarray(i, i + p), cab2 = pos ? 5 : 2, q = new Uint8Array(cab2 + parte.length);
+  q[0] = pos ? 4 : 2; q[1] = id;
+  if(pos){ q[2] = i & 255; q[3] = (i >> 8) & 255; q[4] = (i >> 16) & 255 }
+  q.set(parte, cab2);
   await escrever(q);
   if(progresso) progresso(Math.min(1, (i + p) / corpo.length));
  }
  const fim = new Uint8Array(10), dv = new DataView(fim.buffer);
  fim[0] = 3; fim[1] = id; dv.setUint32(2, crc32(corpo), true); dv.setUint32(6, corpo.length, true);
+ enviadas[id] = {corpo, fim, p};
+ for(const k of Object.keys(enviadas)) if(+k !== id && Object.keys(enviadas).length > 4) delete enviadas[k];
  await escrever(fim);
  return id;
+}
+const enviadas = {};
+// o PC disse o que faltou: manda só esses trechos (com a posição) e o fim de novo
+async function reenviar(id, faltas){
+ const e = enviadas[id]; if(!e) return {ok:false, msg:"não chegou inteiro no PC"};
+ for(const [a, b] of faltas){
+  for(let i = a; i < b; i += e.p){
+   const parte = e.corpo.subarray(i, Math.min(i + e.p, b)), q = new Uint8Array(5 + parte.length);
+   q[0] = 4; q[1] = id; q[2] = i & 255; q[3] = (i >> 8) & 255; q[4] = (i >> 16) & 255; q.set(parte, 5);
+   await escrever(q);
+  }
+ }
+ const espera = esperarResposta("ack" + id, 15000);
+ await escrever(e.fim);
+ return espera;
 }
 function esperarResposta(chave, ms){
  return new Promise((ok, falha) => {
@@ -207,14 +227,19 @@ function esperarResposta(chave, ms){
 }
 // pedido com confirmação do PC; se chegar incompleto, manda de novo em pedaços menores
 async function pedir(cab, conteudo, progresso){
- let p = pedaco;
+ let p = pedaco, ultima = "";
  for(let tentativa = 0; tentativa < 3; tentativa++){
   const id = await enviarMsg(cab, conteudo, p, progresso);
-  const r = await esperarResposta("ack" + id, 12000 + (conteudo ? conteudo.length / 3 : 0));
+  let r = await esperarResposta("ack" + id, 12000 + (conteudo ? conteudo.length / 3 : 0));
+  for(let rodada = 0; !r.ok && r.falta && r.falta.length && rodada < 8; rodada++){
+   if(progresso) progresso(1);
+   r = await reenviar(id, r.falta);
+  }
   if(r.ok || !/incompleto/.test(r.msg || "")) return r;
+  ultima = (r.msg || "").replace(/,? *tentando de novo/, "");
   p = Math.max(18, Math.floor(p / 2));
  }
- return {ok:false, msg:"não chegou inteiro no PC"};
+ return {ok:false, msg:"não chegou inteiro no PC" + (ultima ? " — " + ultima : "")};
 }
 
 // --- notificações do PC: [seq, flags, pedaço] ---
@@ -290,6 +315,7 @@ async function calibrar(){
   resposta = await esperarResposta("ola", 6000);
  }
  pedaco = Math.max(18, Math.min(resposta.pedaco || 18, 200));
+ comPosicao = !!resposta.ofs;
 }
 function caiu(){
  conectado = false; rx = null; tx = null; recebendo = null;
@@ -434,7 +460,7 @@ $("arqAss").addEventListener("change", async e => {
  const r = $("resAss"), barra = $("barraAss"), cheia = barra.querySelector("i");
  r.textContent = "preparando a foto…"; r.className = "resultado";
  try{
-  const jpg = await reduzir(arq, 1600, 0.8);
+  const jpg = await reduzir(arq, 1400, 0.75);
   barra.style.display = "block"; cheia.style.width = "0";
   const t0 = Date.now();
   const resp = await pedir({t: "foto", para: "assinatura"}, jpg, f => { cheia.style.width = (f * 100).toFixed(0) + "%";
